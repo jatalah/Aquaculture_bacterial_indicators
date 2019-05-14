@@ -6,6 +6,7 @@ library(knitr)
 library(pracma)# for finding peaks
 library(ggpubr)
 library(vegan)
+library(ggpmisc)
 
 source('theme_javier.R')
 theme_set(theme_javier())
@@ -19,7 +20,7 @@ abund_ASV <-
   gather(ASV, abund, ASV_001:ncol(.)) %>% 
   group_by(ASV) %>% 
   summarise_at(vars(abund), funs(sum), na.rm =T) %>%
-  top_n(500) %>% 
+  top_n(2000) %>% 
   dplyr::select(ASV) %>% 
   as.list()
 
@@ -97,7 +98,7 @@ peak_dat <-
     Quality = if_else(n_peaks > 2, 4, Quality)) # double peaks)
 
 
-# # need to filter OTU that have Quality<3 on both years----
+# # Quality filteriing ----
 top_qual_ASV <- 
   peak_dat %>%
   select(ASV, Installation, Quality) %>%
@@ -126,8 +127,9 @@ plot_TFS <-
 
 ggsave(plot_TFS, 
        filename = 'figures/TFS_splines.tiff',
-       width = 20,
+       width = 25,
        height = 20,
+       dpi = 90,
        device = 'tiff',
        compression = 'lzw')
 
@@ -179,20 +181,18 @@ ggsave(ggarrange(pp1,pp2),
 
 # read AVS read abundance and eco-groups data-----------------------------------
 env <-  
-  read_csv('data/Bacteria16SMed_Table.csv',col_types = cols()) %>%
+  dna %>%
   select(Station:TOC)
 
 data <- 
-  read_csv('data/Bacteria16SMed_Table.csv',col_types = cols()) %>%
+  dna %>%
   select(Station, ASV_001:ncol(.))
-
-eg <- read_csv('outputs/EG_groups_MED.csv')
 
 # EG proportion calculations --------------
 EG_indices <-
   data %>%
   gather(ASV, abund, -Station) %>%
-  left_join(eg, by = 'ASV') %>%
+  left_join(EG_groups, by = 'ASV') %>%
   group_by(Station) %>%
   mutate(
     N = sum(abund),
@@ -245,11 +245,14 @@ indices_all <-
         AMBI_weights$coefficients[4] * IV_n + 
         AMBI_weights$coefficients[5] * V_n
     )/100
-  )
+  ) %>% 
+  ungroup() %>% 
+  mutate(Distance = fct_relevel(Distance, "0m", "50m", "100m", "250m", "500m", "1000m","2000m", "Control" ))
 
 # Plot euk-AMBI vs macrofaunal AMBI-----------
-ggplot(indices_all, aes(TFS, AMBI2)) +
-  geom_point(size = 4, aes(color  = Distance)) +
+plot4 <- 
+  ggplot(indices_all, aes(TFS, AMBI2)) +
+  geom_point(size = 4, aes(color  = Distance, shape = Installation)) +
   geom_smooth(method = "lm") +
   stat_poly_eq(
     formula = y ~ x,
@@ -258,3 +261,11 @@ ggplot(indices_all, aes(TFS, AMBI2)) +
     size = 4
   ) +
   labs(y = 'Bacterial-AMBI', x =  'Total free sulphide (TFS)')
+
+ggsave(plot4, 
+       filename = 'figures/bct_AMBI_vs_TFS.tiff',
+       device = 'tiff',
+       compression = 'lzw',
+       width = 6,
+       height = 4,
+       dpi = 300)
