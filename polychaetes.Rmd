@@ -1,0 +1,296 @@
+---
+title: "Analyses of benthic monitoring data of two Mediterranean fish farms"
+
+---
+
+## 01 Load libraries and data
+
+```{r message=F, warning=F}
+library(tidyverse)
+library(ggpubr)
+library(vegan)
+library(ggord)
+library(ggpmisc)
+library(readxl)
+library(knitr)
+library(pairwiseAdonis)
+library(benthos)
+library(corrplot)
+
+source('theme_javier.R')
+theme_set(theme_javier())
+
+# polychaetes data
+poli <- 
+  read_excel('data/poliquetos.xlsx', 2) %>% 
+  mutate(Distance = fct_relevel(Distance, "0m" , "50m", "250m", "2000m"),
+         Farm = fct_recode(Farm, `Farm 1` = "Ext", `Farm 2` = "Int"))
+
+# sediment environmental data
+env <- 
+  read_excel('data/poliquetos.xlsx', 1) %>% 
+  select(SampleID, TN, TC, MO, TFS)
+
+```
+
+
+## 02 Plot 12 most abundant families
+```{r, fig.width=12, fig.height=8}
+poli_long <- 
+  poli %>% 
+  gather(taxa, abu, Capitellidae:Nephtyidae) 
+
+top_taxa <- 
+  poli_long %>% 
+  group_by(taxa) %>% 
+  summarise_at(vars(abu), funs(sum), na.rm =T) %>%
+  top_n(12) %>% 
+  dplyr::select(taxa) %>% 
+  as.list()
+
+poli_long %>%
+  filter(taxa %in% top_taxa$taxa) %>% 
+  ggplot() +
+  geom_boxplot(aes(Distance, abu, color = Farm)) +
+  facet_wrap( ~ taxa, scales = 'free', nrow = 3)
+```
+
+## 03 nMDS plot 
+```{r message=F, warning=F, fig.width=16, fig.height=8}
+# 04 MDS ordination -------------
+mds <- metaMDS( sqrt(sqrt(poli[, -c(1:5)])) , distance = 'bray',)
+
+## MDS biplot 
+ggord(
+  mds,
+  grp_in = poli$Distance,
+  poly = F,
+  alpha = 1,
+  ellipse = T,
+  arrow = 0,
+  repel = T,
+  text = .01,
+  vec_ext = .7
+) +
+  theme_javier()
+```
+
+
+## 03 PERMANOVA and SIMPER
+
+```{r message=FALSE, warning=FALSE}
+permanova <-
+  adonis(
+    sqrt(sqrt(poli[,-c(1:5)])) ~ Distance * Farm,
+    method = 'bray',
+    permutations = 9999,
+    data = poli
+  )
+
+permanova
+
+# pairwise comparisons-------------
+pairwise.adonis(
+  sqrt(sqrt(poli[,-c(1:5)])),
+  poli$Distance)
+
+
+# SIMPER ---------------
+simp_distance <- simper(sqrt(sqrt(poli[, -c(1:5)])), poli$Distance, permutations = 999)
+simp_Farm <- simper(sqrt(sqrt(poli[, -c(1:5)])), poli$Farm, permutations = 999)
+
+
+simper_dist_table <- 
+  bind_rows("0m vs. 50m" = simp_distance$`0m_50m` %>% data.frame(),
+            "0m vs 250m" = simp_distance$`0m_250m` %>% data.frame(),
+            "0m vs 2000m" = simp_distance$`0m_2000m` %>% data.frame(),
+          "50m vs 250m" = simp_distance$`50m_250m` %>% data.frame(),
+          "50m vs. 2000m" = simp_distance$`50m_2000m` %>% data.frame(),
+          "250m vs 2000m" = simp_distance$`250m_2000m` %>% data.frame(),
+            .id = "Groups") %>% 
+  dplyr::select(-overall, -ord) %>% 
+  dplyr::filter(cusum<.7) %>% 
+  rename(Family = "species")
+  
+kable(simper_dist_table, digits = 2,caption = "SIMPER table among distances")
+
+
+```
+
+## 04 PERMDIST Multivariate homogeneity of groups dispersions
+```{r}
+dis <- vegdist(sqrt(sqrt(poli[, -c(1:5)])))
+beta_disp <-
+  betadisper(
+    dis, poli$Distance
+  )
+beta_disp
+
+anova(beta_disp)
+
+permutest(beta_disp, pairwise = TRUE, permutations = 999)
+
+plot(beta_disp, main = 'Multivariate homogeneity of groups dispersions')
+
+```
+
+## 05 Univariate diversity indices
+```{r}
+indices <- 
+  poli %>% 
+  transmute(N = rowSums(poli[, -c(1:5)]),
+            H = diversity(poli[, -c(1:5)]),
+            S = specnumber(poli[, -c(1:5)]),
+            J = H/log(S)) %>% 
+  bind_cols(poli[, c(1:5)]) %>% 
+  write_csv('outputs/univariate_poli_indices.csv')
+
+boxplots <- 
+  indices %>% 
+  gather(index, value, c("N", "S", "H", "J")) %>% 
+  mutate(index = fct_relevel(index, c("N", "S", "J"))) %>% 
+  ggplot(., aes(x = Distance, y = value, fill = Farm)) +
+  geom_boxplot(alpha = .8) +
+  facet_wrap(~index,scales = 'free') +
+  theme_bw()
+
+boxplots
+
+
+indices_dat <-
+  indices %>%
+  mutate(N = log(N + 1)) %>% 
+  gather(index, value, c("N", "S", "H", "J")) %>%
+  group_by(index) %>%
+  nest() %>%
+  mutate(
+    anova = map(.x = data, ~ aov(value ~ Distance * Farm, data = .x)),
+    anova_tab = map(anova, ~car::Anova(.)),
+    anova_table = map(anova_tab, broom::tidy),
+    residuals = map(anova, broom::augment))
+
+anova_table <- 
+  indices_dat %>% 
+  select(index,anova_table) %>% 
+  unnest()
+
+kable(anova_table,caption = 'Univariate ANOVAs')
+```
+
+
+## 06 Polychaete AMBI
+
+```{r}
+poli_long %>% 
+  mutate(COMPLIANT = is_accepted(taxon = taxa)) %>% 
+  group_by(taxa) %>% 
+  distinct(COMPLIANT) %>% 
+  filter(COMPLIANT==FALSE) # two non-compliant taxa
+
+AMBI_poli <- 
+  poli_long %>%
+  group_by(SampleID) %>% 
+  nest() %>% 
+  mutate(AMBI = map(data, ~ ambi(taxon = .x$taxa, count = .x$abu))) %>% 
+  select(SampleID,AMBI) %>% 
+  unnest() %>% 
+  right_join(indices, by = "SampleID")
+
+ggplot(AMBI_poli, aes(x = Distance, y = AMBI, fill = Farm)) +
+  geom_boxplot(alpha = .8)
+
+AMBI_env <- left_join(AMBI_poli, env, by = "SampleID")
+
+# AMBI enviroment relationships ------------
+AMBI_env %>% 
+  gather(key, value, TN:TFS) %>% 
+ggplot(aes(x = value, y = AMBI)) +
+  geom_point(alpha = .8, aes(color = Farm), size = 5) +
+  geom_smooth() +
+  facet_wrap(~key, scales = 'free')
+```
+
+
+## 07 Correlation among env. variables
+
+```{r}
+env_bact <- read_csv('data/env_bact.csv', col_types = cols())
+
+cors <- 
+  env_bact %>%
+  select(Sandfine:TOC) %>%
+  cor(method = "pearson")
+
+
+corrplot(
+  cors,
+  type = "upper",
+  tl.col = "black",
+  tl.srt = 45,
+  diag = F,
+  method = 'circle')
+
+```
+
+
+## 08 Bacterial biotic index
+```{r fig.width=12, fig.height=10}
+bact_ambi <- read_csv('data/bMBI_data.csv', col_types = cols())
+env_bact <- read_csv('data/env_bact.csv', col_types = cols())
+bact_env_ambi <- full_join(bact_ambi, env_bact, by = "SampleID")
+
+bact_env_ambi %>%
+gather(key, value, Sandfine:TOC) %>%
+ggplot(aes(x = value, y = AMBI_bact)) +
+geom_point(alpha = .8, size = 5, aes(color = Farm)) +
+geom_smooth(method = 'lm') +
+stat_poly_eq(
+formula = y ~ x,
+aes(label = ..rr.label..),
+parse = TRUE,
+size = 4
+) +
+labs(y = "Bacterial biotic index") +
+facet_wrap( ~ key, scales = 'free_x')
+
+```
+
+
+## 09 Relationship between bacterial AMBI and polyquete AMBI
+```{r}
+bact_poli_ambi <- left_join(AMBI_poli, bact_ambi, by = "SampleID")
+
+ggplot(bact_poli_ambi, aes(x = AMBI, y = AMBI_bact)) +
+  geom_point(alpha = .8, size = 5, aes(color = Farm)) +
+  geom_smooth(method = 'lm') +
+  stat_poly_eq(
+    formula = y ~ x,
+    aes(label = ..rr.label..),
+    parse = TRUE,
+    size = 4
+  ) +
+  labs(x = "Polychaete AMBI" , y = "Bacterial biotic index")
+
+
+```
+
+
+The sample "Int_2000m_1_c" seems to be an outlier affecting the AMBI relationship, as it has an abundance of 82 Capetilidae at 2000 m Distance.
+If this point is removed the relationship improves quite a bit.
+
+```{r}
+bact_poli_ambi %>% 
+  filter(SampleID !="Int_2000m_1_c") %>%
+ggplot(aes(x = AMBI, y = AMBI_bact)) +
+  geom_point(alpha = .8, size = 5, aes(color = Farm)) +
+  geom_smooth(method = 'lm') +
+  stat_poly_eq(
+    formula = y ~ x,
+    aes(label = ..rr.label..),
+    parse = TRUE,
+    size = 4
+  ) +
+  labs(x = "Polychaete AMBI" , y = "Bacterial biotic index")
+```
+
+

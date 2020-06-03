@@ -19,9 +19,9 @@ poli <-
   read_excel('data/poliquetos.xlsx', 2) %>% 
   mutate(Distance = fct_relevel(Distance, "0m" , "50m", "250m", "2000m"))
 
-factors <- 
-  poli %>% 
-select(SampleID:Rep)
+factors <-
+  poli %>%
+  select(SampleID:Rep)
 
 env <- 
   read_excel('data/poliquetos.xlsx', 1) %>% 
@@ -236,43 +236,67 @@ AMBI_poli <-
   mutate(AMBI = map(data, ~ ambi(taxon = .x$taxa, count = .x$abu))) %>% 
   select(SampleID,AMBI) %>% 
   unnest() %>% 
-  right_join(indices, by = "SampleID")
+  right_join(indices, by = "SampleID") %>% 
+  write_csv('data/AMBI_poli.csv')
 
 ggplot(AMBI_poli, aes(x = Distance, y = AMBI, fill = Farm)) +
   geom_boxplot(alpha = .8)
 
-bact_ambi <- read_csv('data/bact_AMBI.csv')
-bact_poli_ambi <- left_join(AMBI_poli, bact_ambi, by = "SampleID")
+bact_ambi <-
+  read_csv('data/indices_all.csv') %>%
+  select(SampleID, bMBI_keely) %>%
+  rename(bMBI = bMBI_keely) %>%
+  right_join(AMBI_poli, by = "SampleID") %>%
+  mutate(Farm = fct_recode(Farm, `Farm 1` = "Ext", `Farm 2` = "Int"),
+         Distance = fct_relevel(Distance, "0m" , "50m", "250m", "2000m"))
+
+write_csv(bact_ambi, 'data/bact_polichaete_indices_data.csv')
 
 
-bact_poli_ambi %>% 
-  filter(SampleID !="Int_2000m_1_c") %>% 
-  ggplot(aes(x = AMBI, y = AMBI_bact)) +
-  geom_point(alpha = .8, size = 5, aes(color = Farm)) +
-  geom_smooth(method = 'lm') +
+poly_AMBI_plot <- 
+  bact_ambi %>%
+  # dplyr::filter(SampleID != "Int_2000m_1_c") %>%
+  ggplot(aes(x = AMBI, y = bMBI)) +
+  geom_point(alpha = .8,
+             size = 4,
+             aes(color  = Distance, shape = Farm)) +
+  geom_smooth(method = lm,  formula = y ~ x, alpha = 0.2) +
   stat_poly_eq(
     formula = y ~ x,
     aes(label = ..rr.label..),
     parse = TRUE,
     size = 4
-  )
+  ) +
+  scale_color_manual(values = c("lightcoral", # 0 m
+                                "firebrick2", # 50
+                                "gold4", # 250
+                                "royalblue1")) +
+  labs(x = "Polychaete AMBI", y = 'Bacterial Biotic Index') +
+  scale_y_continuous(breaks = c(0,3,6,9))
 
-bact_poli_ambi %>% 
-  filter(SampleID !="Int_2000m_1_c") %>% # seems to be an outlier with 82 Capetilidae at 200 m
+library(ggpubr)
+fig_regression <- ggarrange(plot4, poly_AMBI_plot, common.legend = T, legend = 'right')
 
-ggplot(aes(x = AMBI, y = AMBI_bact)) +
-  geom_point(alpha = .8, size = 5, aes(color = Farm)) +
-  geom_smooth(method = 'lm') +
-  stat_poly_eq(
-    formula = y ~ x,
-    aes(label = ..rr.label..),
-    parse = TRUE,
-    size = 4
-  )
+ggsave(
+  ggarrange(plot4, poly_AMBI_plot, common.legend = T, legend = 'right'),
+  filename = 'figures/fig_regressions.tiff',
+  device = 'tiff',
+  compression = 'lzw',
+  width = 10,
+  height = 4,
+  dpi = 300
+)
+
+ggsave(
+  fig_regression,
+  filename = 'figures/fig_regression.svg',
+  device = 'svg',
+  width = 10,
+  height = 4,
+  dpi = 300
+)
 
 
-ggplot(bact_poli_ambi, aes(x = AMBI, y = AMBI_bact, label = SampleID)) +
-  geom_text() 
 
 AMBI_env <- left_join(AMBI_poli, env, by = "SampleID")
 
