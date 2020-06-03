@@ -1,10 +1,6 @@
 ---
 title: "Analyses of benthic monitoring data of two Mediterranean fish farms"
-knit: (function(input_file, encoding) {
-  out_dir <- 'docs';
-  rmarkdown::render(input_file,
- encoding=encoding,
- output_file=file.path(dirname(input_file), out_dir, 'index.html'))})
+output: rmarkdown::github_document
 ---
 
 ## 01 Load libraries and data
