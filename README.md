@@ -3,10 +3,10 @@ Bacterial indicators for Mediterranean Aquaculture farms
 
 A step towards the validation of bacteria biotic indices using DNA metabarcoding for benthic monitoring
 
-Eva Aylagasa*, Javier Atalah <sup>b</sup>, Pablo Sánchez-Jerezc, John Pearmanb, Nuria Casadoc, Jorge Asensic, Kilian Toledo-Guedesc and Susana Carvalhoa 
-aKing Abdullah University of Science and Technology (KAUST), Red Sea Research Center (RSRC), Biological and Environmental Sciences and Engineering (BESE), Thuwal 23955-6900, Saudi Arabia
-bCawthron Institute, Coastal and Freshwater Group, Nelson, 7010, New Zealand
-cUniversity of Alicante. Department of Marine Science and Applyed Biology. A.C. 99. 03080 Alicante. Spain.
+Eva Aylagasa*, Javier Atalah<sup>b</sup>, Pablo Sánchez-Jerez<sup>c</sup>, John Pearman<sup>b</sup>, Nuria Casado<sup>c</sup>, Jorge Asensi<sup>c</sup>, Kilian Toledo-Guedes<sup>c</sup> and Susana Carvalho<sup>a</sup>
+<sup>a</sup>King Abdullah University of Science and Technology (KAUST), Red Sea Research Center (RSRC), Biological and Environmental Sciences and Engineering (BESE), Thuwal 23955-6900, Saudi Arabia
+<sup>b</sup>Cawthron Institute, Coastal and Freshwater Group, Nelson, 7010, New Zealand
+<sup>c</sup>University of Alicante. Department of Marine Science and Applyed Biology. A.C. 99. 03080 Alicante. Spain.
 *Corresponding author
 Eva Aylagas: eva.aylagasmartinez@kaust.edu.sa
 
